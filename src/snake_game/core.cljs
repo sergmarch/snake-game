@@ -29,6 +29,30 @@
   (fn [db _]
     (merge db initial-state)))
 
-(defn run [] (dispatch-sync [:initialize]))
+(register-sub
+  :board
+  (fn [db _]
+    (reaction (:board @db))))
+
+(defn render-board []
+  (let [board (subscribe [:board])]
+   (fn []
+     (let [[width height] @board
+           cells (for [y (range height)]
+                  (into [:tr]
+                    (for [x (range width)
+                          :let [current-pos [x y]]]
+                         [:td.cell])))]
+          (into [:table.stage {:style {:height 377
+                                       :width 527}}]
+                cells)))))
+
+(defn game []
+  [:div [render-board]])
+
+(defn run []
+  (dispatch-sync [:initialize])
+  (reagent/render [game]
+    (.getElementById js/document "app")))
 
 (run)
