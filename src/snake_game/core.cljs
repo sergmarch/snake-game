@@ -34,21 +34,65 @@
   (fn [db _]
     (reaction (:board @db))))
 
+(register-sub
+  :snake
+  (fn [db _]
+    (reaction (:body (:snake @db)))))
+
+(register-sub
+  :point
+  (fn [db _]
+    (reaction (:point @db))))
+
+(register-sub
+  :points
+  (fn [db _]
+    (reaction (:points @db))))
+
+(register-sub
+  :game-running?
+  (fn [db _]
+    (reaction (:game-running? @db))))
+
+(defn score []
+  (let [points (subscribe [:points])]
+   (fn []
+     [:div.score (str "Score: " @points)])))
+
+(defn game-over []
+  (let [game-state (subscribe [:game-running?])]
+   (fn []
+     (if @game-state
+       [:div]
+       [:div.overlay
+        [:div.play
+         [:h1 "↺"]]]))))
+
 (defn render-board []
-  (let [board (subscribe [:board])]
+  (let [board (subscribe [:board])
+        snake (subscribe [:snake])
+        point (subscribe [:point])]
    (fn []
      (let [[width height] @board
+           snake-positions (into #{} @snake)
+           current-point @point
            cells (for [y (range height)]
                   (into [:tr]
                     (for [x (range width)
                           :let [current-pos [x y]]]
-                         [:td.cell])))]
+                         (cond
+                           (snake-positions current-pos) [:td.snake-on-cell]
+                           (= current-pos current-point) [:td.point]
+                           :else [:td.cell]))))]
           (into [:table.stage {:style {:height 377
                                        :width 527}}]
                 cells)))))
 
 (defn game []
-  [:div [render-board]])
+  [:div
+   [render-board]
+   [score]
+   [game-over]])
 
 (defn run []
   (dispatch-sync [:initialize])
