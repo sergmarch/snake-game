@@ -18,6 +18,22 @@
        (when-let [free-positions (seq (remove snake-positions-set board-positions))]
         (rand-nth free-positions))))
 
+(defn move-snake [{:keys [direction body] :as snake}]
+  (let [new-head-position (mapv + direction (first body))]
+   (update-in snake [:body] #(into [] (drop-last (cons new-head-position body))))))
+
+(defn change-snake-direction [[new-x new-y] [x y]]
+  (if (or (= x new-x)
+          (= y new-y))
+      [x y]
+      [new-x new-y]))
+
+(def key-code->move
+  {38 [0 -1]
+   40 [0 1]
+   39 [1 0]
+   37 [-1 0]})
+
 (def initial-state {:board board
                     :snake snake
                     :point (random-free-position snake board)
@@ -28,6 +44,19 @@
   :initialize
   (fn [db _]
     (merge db initial-state)))
+
+(register-handler
+  :next-state
+  (fn [db _]
+    (if (:game-running? db)
+     (update db :snake move-snake)
+     db)))
+
+(register-handler
+  :change-direction
+  (fn [db [_ new-direction]]
+    (update-in db [:snake :direction]
+      (partial change-snake-direction new-direction))))
 
 (register-sub
   :board
@@ -93,6 +122,16 @@
    [render-board]
    [score]
    [game-over]])
+
+(defonce key-handler
+  (events/listen js/window "keydown"
+   (fn [e]
+     (let [key-code (.-keyCode e)]
+      (when (contains? key-code->move key-code)
+       (dispatch [:change-direction (key-code->move key-code)]))))))
+
+(defonce snake-moving
+  (js/setInterval #(dispatch [:next-state]) 150))
 
 (defn run []
   (dispatch-sync [:initialize])
