@@ -10,132 +10,103 @@
 (def snake {:direction [1 0]
             :body [[3 2] [2 2] [1 2] [0 2]]})
 
-(defn random-free-position [snake [x y]]
-  (let [snake-positions-set (into #{} (:body snake))
-        board-positions (for [x-pos (range x)
-                              y-pos (range y)]
-                             [x-pos y-pos])]
-       (when-let [free-positions (seq (remove snake-positions-set board-positions))]
-        (rand-nth free-positions))))
+(def snake-head-directions {38 [0 -1]
+                            39 [1 0]
+                            40 [0 1]
+                            37 [-1 0]})
 
-(defn move-snake [{:keys [direction body] :as snake}]
-  (let [new-head-position (mapv + direction (first body))]
-   (update-in snake [:body] #(into [] (drop-last (cons new-head-position body))))))
+(defn new-snake-head-direction [key-val]
+  (snake-head-directions key-val))
 
-(defn change-snake-direction [[new-x new-y] [x y]]
-  (if (or (= x new-x)
-          (= y new-y))
-      [x y]
-      [new-x new-y]))
+(defn update-snake-position [{:keys [direction body] :as snake}]
+  (let [new-snake-head-position (mapv + (first body) direction)
+        new-snake-body (-> new-snake-head-position
+                           (cons body))]
+    (update-in snake [:body] #(into [] (drop-last new-snake-body)))))
 
-(def key-code->move
-  {38 [0 -1]
-   40 [0 1]
-   39 [1 0]
-   37 [-1 0]})
+(defn random-free-position [snake-body [rows cols]]
+  (let [board-cells (into #{}
+                          (for [row (range rows)
+                                col (range cols)]
+                            [row col]))
+        snake-body-set (into #{} snake-body)
+        board-free-space (into [] (clojure.set/difference board-cells snake-body-set))]
+    (rand-nth board-free-space)))
 
 (def initial-state {:board board
-                    :snake snake
-                    :point (random-free-position snake board)
-                    :points 0
-                    :game-running? true})
+                    :snake {:direction (:direction snake)
+                            :body (:body snake)}
+                    :point (random-free-position (:body snake) board)
+                    :points nil
+                    :game-running? nil})
+
+
+
+; handlers
+(register-handler
+ :initialize
+ (fn [db _]
+   (merge db initial-state)))
 
 (register-handler
-  :initialize
-  (fn [db _]
-    (merge db initial-state)))
+ :update-snake-position
+ (fn [db _]
+   (update db :snake update-snake-position)))
 
 (register-handler
-  :next-state
-  (fn [db _]
-    (if (:game-running? db)
-     (update db :snake move-snake)
-     db)))
+ :update-snake-head-direction
+ (fn [db [_ key-code]]
+   (assoc-in db [:snake :direction] key-code)))
 
-(register-handler
-  :change-direction
-  (fn [db [_ new-direction]]
-    (update-in db [:snake :direction]
-      (partial change-snake-direction new-direction))))
+; subscriptions
+(register-sub
+ :point
+ (fn [db _]
+   (reaction (:point @db))))
 
 (register-sub
-  :board
-  (fn [db _]
-    (reaction (:board @db))))
+ :snake
+ (fn [db _]
+   (reaction (:snake @db))))
 
-(register-sub
-  :snake
-  (fn [db _]
-    (reaction (:body (:snake @db)))))
-
-(register-sub
-  :point
-  (fn [db _]
-    (reaction (:point @db))))
-
-(register-sub
-  :points
-  (fn [db _]
-    (reaction (:points @db))))
-
-(register-sub
-  :game-running?
-  (fn [db _]
-    (reaction (:game-running? @db))))
-
-(defn score []
-  (let [points (subscribe [:points])]
-   (fn []
-     [:div.score (str "Score: " @points)])))
-
-(defn game-over []
-  (let [game-state (subscribe [:game-running?])]
-   (fn []
-     (if @game-state
-       [:div]
-       [:div.overlay
-        [:div.play
-         [:h1 "↺"]]]))))
-
-(defn render-board []
-  (let [board (subscribe [:board])
-        snake (subscribe [:snake])
-        point (subscribe [:point])]
-   (fn []
-     (let [[width height] @board
-           snake-positions (into #{} @snake)
-           current-point @point
-           cells (for [y (range height)]
-                  (into [:tr]
-                    (for [x (range width)
-                          :let [current-pos [x y]]]
-                         (cond
-                           (snake-positions current-pos) [:td.snake-on-cell]
-                           (= current-pos current-point) [:td.point]
-                           :else [:td.cell]))))]
-          (into [:table.stage {:style {:height 377
-                                       :width 527}}]
-                cells)))))
-
-(defn game []
-  [:div
-   [render-board]
-   [score]
-   [game-over]])
+(defonce trigger-snake-moving
+  (js/setInterval #(dispatch [:update-snake-position]) 200))
 
 (defonce key-handler
   (events/listen js/window "keydown"
-   (fn [e]
-     (let [key-code (.-keyCode e)]
-      (when (contains? key-code->move key-code)
-       (dispatch [:change-direction (key-code->move key-code)]))))))
+                 (fn [e]
+                   (let [key-code (.-keyCode e)
+                         current-head-dir (snake-head-directions key-code)]
+                     (when current-head-dir
+                       (dispatch [:update-snake-head-direction current-head-dir]))))))
 
-(defonce snake-moving
-  (js/setInterval #(dispatch [:next-state]) 150))
+
+(defn render-board [[rows cols]]
+  (let [board-width (range rows)
+        board-height (range cols)
+        snake-body (subscribe [:snake])
+        snake-body-set (into #{} (:body @snake-body))
+        current-point (subscribe [:point])
+        table-styles {:height 377
+                      :width 527}
+        cells (for [row board-height]
+               [:tr
+                (for [col board-width
+                      :let [point-cell [col row]]]
+                  (cond
+                    (snake-body-set point-cell) [:td.snake-on-cell]
+                    (= point-cell @current-point) [:td.point]
+                    :else [:td.cell]))])]
+    [:table.stage {:style table-styles}
+     cells]))
+
+(defn app []
+  [:div
+   [render-board board]])
 
 (defn run []
   (dispatch-sync [:initialize])
-  (reagent/render [game]
-    (.getElementById js/document "app")))
+  (reagent/render [app]
+                  (.getElementById js/document "app")))
 
 (run)
