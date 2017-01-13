@@ -3,7 +3,7 @@
   (:require
     [re-frame.core :refer [register-handler register-sub subscribe dispatch]]
     [goog.events :as events]
-    [snake-game.utils :as utils :refer [random-free-position update-snake-position process-move]]))
+    [snake-game.utils :as utils :refer [random-free-position update-snake-position process-move snake-on-board?]]))
 
 (def board [35 25])
 
@@ -19,8 +19,8 @@
                     :snake {:direction (:direction snake)
                             :body (:body snake)}
                     :point (random-free-position (:body snake) board)
-                    :points nil
-                    :game-running? nil})
+                    :points 0
+                    :game-running? true})
 
 (defonce key-handler
   (events/listen js/window "keydown"
@@ -44,10 +44,12 @@
 (register-handler
   :update-snake-position
   (fn [db _]
-    (-> db
-        (update :snake update-snake-position)
-        (as-> after-move
-              (process-move after-move)))))
+    (if (:game-running? db)
+      (-> db
+          (update :snake update-snake-position)
+          (as-> after-move
+                (process-move after-move)))
+      db)))
 
 (register-handler
   :update-snake-head-direction
@@ -68,6 +70,16 @@
  :point
  (fn [db _]
    (reaction (:point @db))))
+
+(register-sub
+ :points
+ (fn [db _]
+   (reaction (:points @db))))
+
+(register-sub
+ :game-running?
+ (fn [db _]
+   (reaction (:game-running? @db))))
 
 (register-sub
  :snake

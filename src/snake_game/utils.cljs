@@ -32,10 +32,26 @@
         y (snake-tail first-y second-y)]
     (update-in snake [:body] #(conj % [x y]))))
 
+(defn snake-on-board? [snake board]
+  (let [snake-body (:body snake)
+        snake-head (first snake-body)
+        head-x-coord (first snake-head)
+        head-y-coord (last snake-head)
+        board-width (first board)
+        board-height (last board)
+        eats-himself? (contains? (into #{} (drop 1 snake-body)) snake-head)]
+    (and (not eats-himself?)
+         (empty? (filter neg? snake-head))
+         (< head-x-coord board-width)
+         (< head-y-coord board-height))))
+
 (defn process-move [{:keys [snake point board] :as db}]
   (let [snake-body (:body snake)]
     (if (= (first snake-body) point)
       (-> db
           (update-in [:snake] snake-growing)
+          (update-in [:points] inc)
           (assoc :point (random-free-position snake-body board)))
-      db)))
+      (if-not (snake-on-board? snake board)
+        (assoc-in db [:game-running?] false)
+        db))))
