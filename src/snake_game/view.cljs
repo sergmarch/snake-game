@@ -1,6 +1,7 @@
 (ns snake-game.view
   (:require
     [re-frame.core :refer [subscribe dispatch]]
+    [goog.events :as events]
     [snake-game.handlers :refer [board]]))
 
 (defn render-board [[rows cols]]

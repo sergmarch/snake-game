@@ -2,6 +2,11 @@
   (:require
     [re-frame.core :refer [subscribe]]))
 
+(def snake-head-directions {38 [0 -1]   ; top
+                            39 [1 0]    ; right
+                            40 [0 1]    ; bottom
+                            37 [-1 0]}) ; left
+
 (defn random-free-position [snake-body [rows cols]]
   (let [board-cells (into #{}
                           (for [row (range rows)
@@ -14,9 +19,7 @@
 (defn update-snake-position [{:keys [direction body] :as snake}]
   (let [new-snake-head-position (mapv + (first body) direction)
         new-snake-body (-> new-snake-head-position
-                           (cons body))
-        current-point (subscribe [:point])
-        snake-head (first body)]
+                           (cons body))]
     (update-in snake [:body] #(into [] (drop-last new-snake-body)))))
 
 (defn snake-tail [coord-1 coord-2]
@@ -52,6 +55,4 @@
           (update-in [:snake] snake-growing)
           (update-in [:points] inc)
           (assoc :point (random-free-position snake-body board)))
-      (if-not (snake-on-board? snake board)
-        (assoc-in db [:game-running?] false)
-        db))))
+      db)))

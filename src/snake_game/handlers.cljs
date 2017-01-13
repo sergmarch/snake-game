@@ -3,17 +3,12 @@
   (:require
     [re-frame.core :refer [register-handler register-sub subscribe dispatch]]
     [goog.events :as events]
-    [snake-game.utils :as utils :refer [random-free-position update-snake-position process-move snake-on-board?]]))
+    [snake-game.utils :as utils :refer [random-free-position update-snake-position process-move snake-on-board? snake-head-directions]]))
 
 (def board [35 25])
 
 (def snake {:direction [1 0]
             :body [[3 2] [2 2] [1 2] [0 2]]})
-
-(def snake-head-directions {38 [0 -1]   ; top
-                            39 [1 0]    ; right
-                            40 [0 1]    ; bottom
-                            37 [-1 0]}) ; left
 
 (def initial-state {:board board
                     :snake {:direction (:direction snake)
@@ -48,7 +43,9 @@
       (-> db
           (update :snake update-snake-position)
           (as-> after-move
-                (process-move after-move)))
+                (if (snake-on-board? (:snake after-move) (:board after-move))
+                  (process-move after-move)
+                  (assoc-in db [:game-running?] false))))
       db)))
 
 (register-handler
@@ -60,9 +57,6 @@
   :point
   (fn [db _]
     (update db :point random-free-position (get-in db [:snake :body]) board)))
-
-(defonce trigger-snake-moving
-  (js/setInterval #(dispatch [:update-snake-position]) 150))
 
 
 ; subscriptions
